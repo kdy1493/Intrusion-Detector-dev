@@ -1,0 +1,12 @@
+# SAM2.1 Hiera Large 모델 설정
+model:
+  type: "hiera_large"
+  checkpoint: "checkpoints/sam2.1_hiera_large.pt"
+  
+inference:
+  device: "cuda"
+  batch_size: 1
+  
+video:
+  max_frames: 30
+  propagation_strategy: "linear" 
