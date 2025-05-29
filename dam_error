@@ -1,0 +1,1 @@
+$env:PYTHONPATH = "C:\Users\kist-cmr\sam2;$env:PYTHONPATH"

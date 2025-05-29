@@ -150,15 +150,26 @@ def record_and_describe(cap: cv2.VideoCapture, duration: int = DURATION_SEC, fps
 # -----------------------------------------------------------------------------
 
 def main():
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # 카메라 1 사용 (더 안정적)
+    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     if not cap.isOpened():
-        print("Cannot open camera.")
-        return
-
+        print("카메라 1을 열 수 없습니다. 카메라 0을 시도합니다...")
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            print("카메라를 열 수 없습니다.")
+            return
+    
+    # 카메라 설정 최적화
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # 버퍼 크기 줄여서 지연 감소
+    
     print("s: record 5 seconds | q: quit")
     while True:
         ret, frame = cap.read()
         if not ret:
+            print("프레임을 읽을 수 없습니다.")
             break
 
         cv2.imshow("Camera", frame)
@@ -177,11 +188,11 @@ def main():
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # 환경 체크 (선택)
+    # 환경 체크 (선택) - 경고 메시지 숨김
     try:
         import sam2, torch
-        if not hasattr(sam2, "_C"):
-            warnings.warn("⚠ SAM2 C-extension not found – using Dummy predictor (quality↓)")
+        # if not hasattr(sam2, "_C"):
+        #     warnings.warn("⚠ SAM2 C-extension not found – using Dummy predictor (quality↓)")
         if not torch.cuda.is_available():
             warnings.warn("⚠ CUDA not available – inference will run on CPU (slow)")
     except ImportError:
