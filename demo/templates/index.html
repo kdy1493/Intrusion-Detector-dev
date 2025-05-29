@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Human Detection & Tracking</title>
+  <style>
+    body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #eef2f5; }
+    .wrap { display: flex; height: 100vh; }
+    .video-box { flex: 2; background: #000; display: flex; justify-content: center; align-items: center; }
+    .video-box img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+    .panel { flex: 1; padding: 30px; background: #fff; box-shadow: -2px 0 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 20px; }
+    .btn { padding: 12px; font-size: 16px; border: none; border-radius: 4px; background: #4a90e2; color: #fff; cursor: pointer; }
+    .btn:hover { background: #357abd; }
+    .status { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; background: #e74c3c; transition: background .3s; }
+    .tracking .dot { background: #2ecc71; }
+    .log { flex: 1; background: #f7f9fb; border: 1px solid #ddd; border-radius: 4px; padding: 10px; overflow-y: auto; font-size: 14px; }
+    .log-entry {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      margin-bottom: 6px;
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .log-entry .ts {
+      font-family: monospace;
+      font-size: 12px;
+      color: #888;
+      min-width: 60px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="video-box">
+      <img src="{{ url_for('video_feed') }}" />
+    </div>
+    <div class="panel">
+      <button class="btn" onclick="requestRedetect()">재검출</button>
+      <div id="status" class="status waiting">
+        <div class="dot"></div>
+        <div class="text">Waiting for human</div>
+      </div>
+      <div id="alert-log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    function updateStatus(code) {
+      const status = document.getElementById("status");
+      const text   = status.querySelector(".text");
+      if (code === "00" || code === "01") {
+        status.classList.add("tracking");
+        text.textContent = "Human Tracking";
+      } else if (code === "02") {
+        status.classList.remove("tracking");
+        text.textContent = "Waiting for human";
+      }
+    }
+
+    function addLogEntry(code, message) {
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+
+      const ts = document.createElement("span");
+      ts.className = "ts";
+      ts.textContent = new Date().toLocaleTimeString();
+
+      const txt = document.createElement("span");
+      txt.textContent = `${code}: ${message}`;
+
+      entry.append(ts, txt);
+
+      const logDiv = document.getElementById("alert-log");
+      if (logDiv.firstChild) {
+        logDiv.insertBefore(entry, logDiv.firstChild);
+      } else {
+        logDiv.appendChild(entry);
+      }
+    }
+
+    const evt = new EventSource("/alerts");
+    evt.onmessage = e => {
+      if (!e.data.trim()) return;
+      const { code, message } = JSON.parse(e.data);
+      addLogEntry(code, message);
+      updateStatus(code);
+    };
+
+    function requestRedetect() {
+      fetch("/redetect", { method: "POST" });
+    }
+  </script>
+</body>
+</html>
