@@ -1,6 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import os
@@ -64,16 +61,9 @@ EXTRA_PACKAGES = {
     ],
 }
 
-# By default, we also build the SAM 2 CUDA extension.
-# You may turn off CUDA build with `export SAM2_BUILD_CUDA=0`.
 BUILD_CUDA = os.getenv("SAM2_BUILD_CUDA", "1") == "1"
-# By default, we allow SAM 2 installation to proceed even with build errors.
-# You may force stopping on errors with `export SAM2_BUILD_ALLOW_ERRORS=0`.
 BUILD_ALLOW_ERRORS = os.getenv("SAM2_BUILD_ALLOW_ERRORS", "1") == "1"
 
-# Catch and skip errors during extension building and print a warning message
-# (note that this message only shows up under verbose build mode
-# "pip install -v -e ." or "python setup.py build_ext -v")
 CUDA_ERROR_MSG = (
     "{}\n\n"
     "Failed to build the SAM 2 CUDA extension due to the error above. "
@@ -172,6 +162,7 @@ setup(
         "ffmpeg-python>=0.2.0",
         "ultralytics>=8.3.131",
         "hydra-core>=1.3.2",
+        "iopath>=0.1.10",
     ],
 
     extras_require={
