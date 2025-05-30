@@ -26,8 +26,8 @@ class HumanDetectionApp:
         self.SAM_CONFIG_PATH = "./configs/samurai/sam2.1_hiera_b+.yaml"
         self.SAM_CHECKPOINT_PATH = os.path.abspath("checkpoints/sam2.1_hiera_base_plus.pt")
         self.DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-        #self.HFOV = 67.6 
-        #self.VFOV = 41.2
+        self.HFOV = 67.6 
+        self.VFOV = 41.2
 
     def setup_models(self):
         self.yolo = YOLO(self.YOLO_MODEL_PATH)
@@ -106,7 +106,7 @@ class HumanDetectionApp:
             x1, y1, x2, y2 = xs.min(), ys.min(), xs.max(), ys.max()
             bbox_coords = (x1, y1, x2, y2)
             cv2.rectangle(disp, (x1,y1), (x2,y2), (0,255,255), 2)
-        disp = cv2.addWeighted(disp, 0.5, frame, 0.5, 0)
+        disp = cv2.addWeighted(disp, 0.3, frame, 0.7, 0)
         return bbox_coords
 
     def check_stationary_behavior(self, bbox_coords):
@@ -149,16 +149,14 @@ class HumanDetectionApp:
                 x1, y1, x2, y2 = bbox_coords
                 cx, cy = (x1+x2)/2, (y1+y2)/2
 
-                cv2.circle(disp, (cx, cy), radius=5, color=(0,0,255), thickness=-1)
+                cv2.circle(disp, (int(cx), int(cy)), radius=5, color=(0,0,255), thickness=-1)
 
-                """
                 h, w = disp.shape[:2]
                 dx = cx - (w/2)
                 dy = cy - (h/2)
                 pan_angle  = (dx/(w/2)) * (self.HFOV/2)
                 tilt_angle = (dy/(h/2)) * (self.VFOV/2)
                 print(f"Pan: {pan_angle:.1f}°, Tilt: {tilt_angle:.1f}°")
-                """
 
                 self.check_stationary_behavior(bbox_coords)
 
