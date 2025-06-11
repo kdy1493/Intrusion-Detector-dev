@@ -151,7 +151,7 @@ def record_and_describe(cap: cv2.VideoCapture, duration: int = DURATION_SEC, fps
 
 def main():
     # 카메라 1 사용 (더 안정적)
-    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     if not cap.isOpened():
         print("카메라 1을 열 수 없습니다. 카메라 0을 시도합니다...")
         cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)

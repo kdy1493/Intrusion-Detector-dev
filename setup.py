@@ -163,6 +163,13 @@ setup(
         "ultralytics>=8.3.131",
         "hydra-core>=1.3.2",
         "iopath>=0.1.10",
+        "transformers>=4.37.0",
+        "accelerate>=0.20.0",
+        "sentencepiece>=0.1.99",
+        "protobuf>=3.20.0",
+        "huggingface_hub>=0.19.0",
+        "pillow>=9.4.0",
+        "tqdm>=4.66.1",
     ],
 
     extras_require={

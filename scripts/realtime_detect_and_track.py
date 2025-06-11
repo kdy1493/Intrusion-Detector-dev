@@ -9,8 +9,8 @@ from ultralytics import YOLO
 from sam2.build_sam import build_sam2_object_tracker
 
 YOLO_MODEL_PATH     = os.path.abspath("checkpoints/yolov8n.pt")
-SAM_CONFIG_PATH     = "./configs/samurai/sam2.1_hiera_b+.yaml"
-SAM_CHECKPOINT_PATH = os.path.abspath("checkpoints/sam2.1_hiera_base_plus.pt")
+SAM_CONFIG_PATH     = "./configs/samurai/sam2.1_hiera_t.yaml"
+SAM_CHECKPOINT_PATH = os.path.abspath("checkpoints/sam2.1_hiera_tiny.pt")
 DEVICE              = "cuda:0" if torch.cuda.is_available() else "cpu"
 CAM_INDEX           = 2
 

@@ -168,7 +168,7 @@ class HumanDetectionApp:
 
     def gen_frames(self):
         global last_timestamp
-        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         if not cap.isOpened():
             raise RuntimeError("camera is not opened")
 
