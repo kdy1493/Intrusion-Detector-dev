@@ -170,6 +170,15 @@ setup(
         "huggingface_hub>=0.19.0",
         "pillow>=9.4.0",
         "tqdm>=4.66.1",
+        "autoroot>=1.0.1",
+        "autorootcwd>=1.0.1",
+        "matplotlib>=3.10.3",
+        "paho-mqtt>=2.1.0",
+        "pandas>=2.2.3",
+        "pip>=25.1.1",
+        "requests>=2.32.3",
+        "scikit-learn>=1.6.1",
+        "scipy>=1.15.3",
     ],
 
     extras_require={

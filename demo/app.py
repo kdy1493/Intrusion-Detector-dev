@@ -7,6 +7,10 @@ from flask import Flask, render_template, Response, request, jsonify
 from ultralytics import YOLO
 from sam2.build_sam import build_sam2_object_tracker
 from alerts import AlertManager, AlertCodes
+import base64
+import importlib
+import pathlib
+import sys
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -18,6 +22,18 @@ class HumanDetectionApp:
         self.alert_manager = AlertManager()
         self.setup_config()
         self.setup_models()
+        # Start CADA backend (MQTT + PNG rendering)
+        proj_root = pathlib.Path(__file__).resolve().parent.parent
+        sys.path.insert(0, str(proj_root))
+        # 외부 site-packages 의 'scripts' 모듈이 이미 로드됐으면 제거 후 재시도
+        if 'scripts' in sys.modules:
+            del sys.modules['scripts']
+        # 동적 import → 모듈 객체 확보
+        _cada_mod = importlib.import_module('scripts.CADA_visualizer')  # type: ignore
+        # Headless backend 시작(한 번만 실행됨)
+        _cada_mod.start_headless_backend()
+        # 메서드 참조 보관
+        self._get_plot_png = _cada_mod.get_latest_plot_png
         self.setup_routes()
         self.reset_state()
 
@@ -45,6 +61,7 @@ class HumanDetectionApp:
         self.app.route('/alerts')(self.alerts)
         self.app.route('/redetect', methods=['POST'])(self.redetect)
         self.app.route('/timestamp')(self.timestamp)
+        self.app.route('/cada_plot_stream')(self.cada_plot_stream)
 
     def timestamp(self):
         return jsonify({'timestamp': last_timestamp})
@@ -223,6 +240,20 @@ class HumanDetectionApp:
     def video_feed(self):
         return Response(self.gen_frames(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
+
+    # ------------------------------------------------------------------
+    # SSE: CADA Plot PNG push (base64)
+    # ------------------------------------------------------------------
+    def cada_plot_stream(self):
+        def event_stream():
+            while True:
+                png = self._get_plot_png()
+                if png:
+                    yield "data: " + base64.b64encode(png).decode() + "\n\n"
+                else:
+                    yield "data: \n\n"
+                time.sleep(1)
+        return Response(event_stream(), mimetype='text/event-stream')
 
     def run(self):
         self.app.run(host='0.0.0.0', port=5000, debug=True)

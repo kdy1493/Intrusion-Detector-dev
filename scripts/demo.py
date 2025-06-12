@@ -193,6 +193,7 @@ if __name__ == "__main__":
         import sam2, torch
         # if not hasattr(sam2, "_C"):
         #     warnings.warn("⚠ SAM2 C-extension not found – using Dummy predictor (quality↓)")
+
         if not torch.cuda.is_available():
             warnings.warn("⚠ CUDA not available – inference will run on CPU (slow)")
     except ImportError:
