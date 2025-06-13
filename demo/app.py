@@ -1,3 +1,4 @@
+import autoroot
 import os
 import time
 import cv2
@@ -7,33 +8,67 @@ from flask import Flask, render_template, Response, request, jsonify
 from ultralytics import YOLO
 from sam2.build_sam import build_sam2_object_tracker
 from alerts import AlertManager, AlertCodes
-import base64
-import importlib
-import pathlib
-import sys
+import math
+from flask_socketio import SocketIO
+from src.CADA.realtime_csi_handler_utils import create_buffer_manager, load_calibration_data
+from src.CADA.CADA_process import parse_and_normalize_payload, SlidingCadaProcessor
+from src.CADA.mqtt_utils import start_csi_mqtt_thread
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+# ------------------------------------------------------------------
+# SocketIO & CADA 글로벌 초기화
+# ------------------------------------------------------------------
+
+socketio = SocketIO(async_mode="threading")  # app 객체는 뒤에서 bind
+_mqtt_started = False  # MQTT 스레드 시작 여부 플래그
+
+# --- CADA 설정값 ---
+TOPICS = ["L0382/ESP/8"]
+INDICES_TO_REMOVE = list(range(21, 32))  # 52→41
+SUBCARRIERS = 52
+CADA_WINDOW_SIZE = 320
+CADA_STRIDE = 40
+SMALL_WIN_SIZE = 64
+FPS_LIMIT = 10
+BROKER_ADDR = "61.252.57.136"
+BROKER_PORT = 4991
+
+# CADA 전역 버퍼 및 프로세서 (app 생성 이후에 초기화할 예정)
+buf_mgr = None  # type: ignore
+sliding_processors = {}
+time_last_emit = {}
+th_interp_state = {}
+
+# timestamp global for /timestamp route
 last_timestamp = "--:--:--"
 
 class HumanDetectionApp:
     def __init__(self):
         self.app = Flask(__name__)
+        socketio.init_app(self.app, async_mode="threading")
         self.alert_manager = AlertManager()
         self.setup_config()
         self.setup_models()
-        # Start CADA backend (MQTT + PNG rendering)
-        proj_root = pathlib.Path(__file__).resolve().parent.parent
-        sys.path.insert(0, str(proj_root))
-        # 외부 site-packages 의 'scripts' 모듈이 이미 로드됐으면 제거 후 재시도
-        if 'scripts' in sys.modules:
-            del sys.modules['scripts']
-        # 동적 import → 모듈 객체 확보
-        _cada_mod = importlib.import_module('scripts.CADA_visualizer')  # type: ignore
-        # Headless backend 시작(한 번만 실행됨)
-        _cada_mod.start_headless_backend()
-        # 메서드 참조 보관
-        self._get_plot_png = _cada_mod.get_latest_plot_png
+        # ---- CADA 버퍼 초기화 ----
+        global buf_mgr, sliding_processors
+        buf_mgr = create_buffer_manager(TOPICS)
+        load_calibration_data(TOPICS, buf_mgr.mu_bg_dict, buf_mgr.sigma_bg_dict)
+        for t in TOPICS:
+            buf_mgr.cada_ewma_states[t] = 0.0
+
+        sliding_processors = {
+            t: SlidingCadaProcessor(
+                topic=t,
+                buffer_manager=buf_mgr,
+                mu_bg_dict=buf_mgr.mu_bg_dict,
+                sigma_bg_dict=buf_mgr.sigma_bg_dict,
+                window_size=CADA_WINDOW_SIZE,
+                stride=CADA_STRIDE,
+                small_win_size=SMALL_WIN_SIZE,
+                threshold_factor=2.5,
+            ) for t in TOPICS
+        }
         self.setup_routes()
         self.reset_state()
 
@@ -61,7 +96,6 @@ class HumanDetectionApp:
         self.app.route('/alerts')(self.alerts)
         self.app.route('/redetect', methods=['POST'])(self.redetect)
         self.app.route('/timestamp')(self.timestamp)
-        self.app.route('/cada_plot_stream')(self.cada_plot_stream)
 
     def timestamp(self):
         return jsonify({'timestamp': last_timestamp})
@@ -241,23 +275,75 @@ class HumanDetectionApp:
         return Response(self.gen_frames(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
 
-    # ------------------------------------------------------------------
-    # SSE: CADA Plot PNG push (base64)
-    # ------------------------------------------------------------------
-    def cada_plot_stream(self):
-        def event_stream():
-            while True:
-                png = self._get_plot_png()
-                if png:
-                    yield "data: " + base64.b64encode(png).decode() + "\n\n"
-                else:
-                    yield "data: \n\n"
-                time.sleep(1)
-        return Response(event_stream(), mimetype='text/event-stream')
-
     def run(self):
-        self.app.run(host='0.0.0.0', port=5000, debug=True)
+        socketio.run(self.app, host="0.0.0.0", port=5000, debug=True)
 
+# ------------------------------------------------------------------
+# MQTT + SocketIO global helpers
+# ------------------------------------------------------------------
+
+def _start_mqtt():
+    """백그라운드에서 MQTT 수신 쓰레드를 한 번만 시작"""
+    global _mqtt_started
+    if _mqtt_started:
+        return
+    start_csi_mqtt_thread(
+        message_handler=mqtt_handler,
+        topics=TOPICS,
+        broker_address=BROKER_ADDR,
+        broker_port=BROKER_PORT,
+        daemon=True,
+    )
+    _mqtt_started = True
+
+def mqtt_handler(topic: str, payload: str):
+    now = time.time()
+    prev_emit = time_last_emit.get(topic, 0.0)
+
+    parsed = parse_and_normalize_payload(
+        payload, topic, SUBCARRIERS, INDICES_TO_REMOVE,
+        buf_mgr.mu_bg_dict, buf_mgr.sigma_bg_dict)
+    if parsed is None:
+        return
+    amp_z, pkt_time = parsed
+    buf_mgr.timestamp_buffer[topic].append(pkt_time)
+    sliding_processors[topic].push(amp_z, pkt_time)
+
+    if not buf_mgr.cada_feature_buffers["activity_detection"][topic]:
+        return
+
+    idx = -1
+    activity = buf_mgr.cada_feature_buffers["activity_detection"][topic][idx]
+    flag     = buf_mgr.cada_feature_buffers["activity_flag"][topic][idx]
+    threshold = buf_mgr.cada_feature_buffers["threshold"][topic][idx]
+    ts_ms = int(pkt_time.timestamp()*1000)
+
+    if (now - prev_emit) < 1.0/FPS_LIMIT:
+        return
+    time_last_emit[topic] = now
+
+    socketio.emit("cada_result", {
+        "topic": topic,
+        "timestamp_ms": ts_ms,
+        "activity": float(activity),
+        "flag": int(flag),
+        "threshold": float(threshold),
+    }, namespace="/csi")
+
+# ------------------------------------------------------------------
+# SocketIO 네임스페이스 이벤트
+# ------------------------------------------------------------------
+
+@socketio.on("connect", namespace="/csi")
+def on_connect():
+    _start_mqtt()
+    print("[SocketIO] Client connected")
+
+@socketio.on("disconnect", namespace="/csi")
+def on_disconnect():
+    print("[SocketIO] Client disconnected")
+
+# ------------------------------------------------------------------
 if __name__ == '__main__':
-    app = HumanDetectionApp()
-    app.run()
+    print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
+    HumanDetectionApp().run()
