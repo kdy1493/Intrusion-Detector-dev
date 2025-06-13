@@ -14,7 +14,7 @@ import threading
 
 
 def create_mqtt_client(message_handler, topics, broker_address, broker_port):
-    """범용 MQTT 클라이언트 생성 함수 """
+    """범용 MQTT 클라이언트 생성 함수 (원본 util 함수 그대로)"""
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
