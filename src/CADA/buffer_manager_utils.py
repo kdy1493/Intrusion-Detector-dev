@@ -34,6 +34,11 @@ class BufferManager:
         self.buffer_size = buffer_size
         self.window_size = window_size
         
+        # CADA용 배경 평균/표준편차 저장용 딕셔너리 및 EWMA 상태값 초기화
+        self.mu_bg_dict: Dict[str, np.ndarray] = {topic: np.array([]) for topic in self.topics}
+        self.sigma_bg_dict: Dict[str, np.ndarray] = {topic: np.array([]) for topic in self.topics}
+        self.cada_ewma_states: Dict[str, float] = {topic: 0.0 for topic in self.topics}
+        
         # 버퍼 초기화
         self._init_buffers()
     
@@ -111,3 +116,11 @@ class BufferManager:
 def create_buffer_manager(topics: List[str], buffer_size: int = 512, window_size: int = 64) -> BufferManager:
     """버퍼 매니저 생성 함수"""
     return BufferManager(topics, buffer_size, window_size) 
+
+# ---------------------------------------------------------------
+# 외부 호환성을 위한 래퍼 함수
+# demo/app.py 및 기타 모듈에서
+# `from src.CADA.buffer_manager_utils import load_calibration_data`
+# 로 임포트하는 경우가 있어 이를 재노출한다.
+# ---------------------------------------------------------------
+from .CADA_process import load_calibration_data  # type: ignore 

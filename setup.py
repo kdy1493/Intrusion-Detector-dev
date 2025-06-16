@@ -21,7 +21,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 REQUIRED_PACKAGES = [
     "torch>=2.3.1",
     "torchvision>=0.18.1",
-    "numpy>=1.24.4",
+    "numpy>=1.24.4,<2.0",
     "tqdm>=4.66.1",
     "hydra-core>=1.3.2",
     "iopath>=0.1.10",
@@ -157,7 +157,7 @@ setup(
         "torch>=2.3.1",
         "torchvision>=0.18.1",
         "opencv-python>=4.9.0.80",
-        "numpy>=1.24.4",
+        "numpy>=1.24.4,<2.0",
         "flask>=3.0.3",
         "ffmpeg-python>=0.2.0",
         "ultralytics>=8.3.131",

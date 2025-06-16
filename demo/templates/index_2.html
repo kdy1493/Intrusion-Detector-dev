@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+  <h3>Simple CSI (channel-avg) · Live</h3>
+  <div id="plot" style="width:90vw;height:45vh;"></div>
+  <script>
+    const socket = io();
+    const trace  = {x:[], y:[], mode:"lines", line:{width:1}};
+    Plotly.newPlot("plot", [trace]);
+    socket.on("csi", (d)=>{
+        Plotly.update("plot", {x:[d.t], y:[d.y]}, {}, [0]);
+    });
+  </script>
+  <h3>WebCam (FastRTC)</h3>
+  <iframe src="/ui" style="width:480px;height:360px;border:none;"></iframe>
+</body>
+</html>
