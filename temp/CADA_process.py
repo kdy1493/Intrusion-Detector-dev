@@ -176,7 +176,10 @@ def realtime_extract_motion_features(detrended, prev_samples, WIN_SIZE=64):
     
     return feature, prev_samples
 
-def realtime_detect_activity_with_ewma(feature, ewma_state, threshold_factor=2.5, alpha=0.01):
+def realtime_detect_activity_with_ewma(feature, 
+                                       ewma_state, 
+                                       threshold_factor=2.5, 
+                                       alpha=0.01):
     """
     Desc:
         실시간 CSI 데이터에서 EWMA 방식으로 임계선을 계산하고, 움직임 감지를 수행하는 함수 (CSI_To_CSV.py 방식)
@@ -214,8 +217,14 @@ def realtime_detect_activity_with_ewma(feature, ewma_state, threshold_factor=2.5
 # ==========================================================================================
 # === 실시간 처리를 위한 통합 함수 =============================================================
 
-def realtime_cada_pipeline(amp_normalized, mean_buffer, prev_samples, ewma_state, 
-                          historical_window=100, WIN_SIZE=64, threshold_factor=2.5, alpha=0.01):
+def realtime_cada_pipeline(amp_normalized, 
+                           mean_buffer, 
+                           prev_samples, 
+                           ewma_state, 
+                          historical_window=100, 
+                          WIN_SIZE=64, 
+                          threshold_factor=2.5, 
+                          alpha=0.01):
     """
     Desc:
         CADA 파이프라인을 실시간 처리가 가능하도록 통합한 함수

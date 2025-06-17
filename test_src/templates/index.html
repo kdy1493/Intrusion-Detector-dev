@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Human Detection & CSI Activity</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <style>
+     body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #eef2f5; }
+    .wrap { display: flex; height: 100vh; }
+    .left-col { flex: 2; display: flex; flex-direction: column; }
+    .video-box { flex: 5 1 0; background: #000; display: flex; justify-content: center; align-items: center; }
+    .video-box img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+    .panel { flex: 1; padding: 30px; background: #fff; box-shadow: -2px 0 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 20px; }
+    .btn { padding: 12px; font-size: 16px; border: none; border-radius: 4px; background: #4a90e2; color: #fff; cursor: pointer; }
+    .btn:hover { background: #357abd; }
+    .status { display: flex; align-items: center; gap: 10px; font-size: 18px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; background: #e74c3c; transition: background .3s; }
+    .tracking .dot { background: #2ecc71; }
+    .log { flex: 1; background: #f7f9fb; border: 1px solid #ddd; border-radius: 4px; padding: 10px; overflow-y: auto; font-size: 14px; }
+    .log-entry { display: flex; align-items: center; gap: 8px; padding: 8px; margin-bottom: 6px; background: #fff; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .log-entry .ts { font-family: monospace; font-size: 12px; color: #888; min-width: 60px; }
+    .plot-box { flex: 5 1 0; background:#fafbfc; border:1px solid #ddd; border-radius:4px; display:flex; }
+    .plot-box img { width:100%; height:auto; max-height:100%; object-fit:contain; }
+    #plots { flex:1; width:100%; height:100%; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="left-col">
+      <div class="video-box">
+        <img src="{{ url_for('video_feed') }}" />
+      </div>
+      <div class="plot-box"><div id="plots" style="width:100%;height:100%;"></div></div>
+    </div>
+    <div class="panel">
+      <button class="btn" onclick="requestRedetect()">재검출</button>
+      <div id="status" class="status waiting">
+        <div class="dot"></div>
+        <div class="text">Waiting for human</div>
+      </div>
+      <div id="alert-log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    function updateStatus(code) {
+      const status = document.getElementById("status");
+      const text   = status.querySelector(".text");
+      if (code === "00" || code === "01") {
+        status.classList.add("tracking");
+        text.textContent = "Human Tracking";
+      } else if (code === "02") {
+        status.classList.remove("tracking");
+        text.textContent = "Waiting for human";
+      }
+    }
+
+    function addLogEntry(code, message) {
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+
+      const ts = document.createElement("span");
+      ts.className = "ts";
+      ts.textContent = new Date().toLocaleTimeString();
+
+      const txt = document.createElement("span");
+      txt.textContent = `${code}: ${message}`;
+
+      entry.append(ts, txt);
+
+      const logDiv = document.getElementById("alert-log");
+      if (logDiv.firstChild) {
+        logDiv.insertBefore(entry, logDiv.firstChild);
+      } else {
+        logDiv.appendChild(entry);
+      }
+    }
+
+    // --- Alerts (SSE) -------------------------------------------------
+    const alertEvt = new EventSource("/alerts");
+    alertEvt.onmessage = e => {
+      if (!e.data.trim()) return;
+      const { code, message } = JSON.parse(e.data);
+      addLogEntry(code, message);
+      updateStatus(code);
+    };
+
+    // --- CSI Plot (SocketIO + Plotly) ---------------------------------
+    const socket = io("/csi");
+    const gd     = document.getElementById("plots");
+    const trMap  = {};             // topic → {act, thr, flag}
+    const MAXPTS = 500;
+
+    Plotly.newPlot(gd, [], {
+      title:"Waiting for data…",
+      xaxis:{title:"Time", type:"date"},
+      yaxis:{title:"Value"}
+    });
+
+    socket.on("cada_result", msg=>{
+      const t = msg.topic;
+      const x = new Date(msg.timestamp_ms);
+      const yA = msg.activity;
+      const yT = msg.threshold;
+      const yF = msg.flag;
+
+      if(!(t in trMap)){
+        const base = t.replaceAll("/","_");
+        const actTr = {x:[x],y:[yA],mode:"lines",name:`${base}_act`,line:{color:"#1f77b4"}};
+        const thrTr = {x:[x],y:[yT],mode:"lines",name:`${base}_thr`,line:{dash:"dot",color:"#ff7f0e"}};
+        const flgTr = {x:[x],y:[yF],mode:"lines",name:`${base}_flag`,line:{color:"#2ca02c"}};
+        const actIdx = gd.data.length;
+        const thrIdx = actIdx+1;
+        const flgIdx = actIdx+2;
+        Plotly.addTraces(gd,[actTr,thrTr,flgTr]);
+        trMap[t]={actIdx,thrIdx,flgIdx};
+        Plotly.relayout(gd,{title:""});
+      }else{
+        const {actIdx,thrIdx,flgIdx}=trMap[t];
+        Plotly.extendTraces(gd,{x:[[x]],y:[[yA]]},[actIdx],MAXPTS);
+        Plotly.extendTraces(gd,{x:[[x]],y:[[yT]]},[thrIdx],MAXPTS);
+        Plotly.extendTraces(gd,{x:[[x]],y:[[yF]]},[flgIdx],MAXPTS);
+      }
+    });
+
+    function requestRedetect() {
+      fetch("/redetect", { method: "POST" });
+    }
+  </script>
+</body>
+</html> 

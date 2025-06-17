@@ -229,21 +229,22 @@ def detect_activity_with_ewma(feature: np.ndarray,
         threshold: 현재 임계값
         ewma_state: 업데이트된 EWMA 상태
     """
-    try:
-        # EWMA 계산
-        ewma_state = alpha * np.mean(feature) + (1 - alpha) * ewma_state
-        
-        # 임계값 계산
-        threshold = threshold_factor * ewma_state
-        
-        # 활동 감지
-        activity_flag_array = np.where(feature > threshold, 1, 0)
-        
-        return activity_flag_array, threshold, ewma_state
-        
-    except Exception as e:
-        print(f"Error in detect_activity_with_ewma: {e}")
-        return np.zeros_like(feature), 0.1, ewma_state
+    # 현재 변화량의 평균 계산 - CSI_To_CSV.py 방식
+    avgSigVal = np.mean(feature) if len(feature) > 0 else 0.0
+    
+    # EWMA 업데이트 (실시간 상태 유지) - CSI_To_CSV.py 방식
+    if ewma_state == 0.0:
+        ewma_state = avgSigVal
+    else:
+        ewma_state = alpha * avgSigVal + (1 - alpha) * ewma_state
+    
+    # 임계값 계산 - CSI_To_CSV.py 방식
+    threshold = threshold_factor * ewma_state
+    
+    # 활동 감지 - CSI_To_CSV.py 방식
+    activity_flag = (feature > threshold).astype(float)
+    
+    return activity_flag, threshold, ewma_state
 
 def cada_pipeline(
     amp_window: np.ndarray,
